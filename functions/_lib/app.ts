@@ -321,26 +321,26 @@ app.get("/api/calendar/stress", requireAuth, async (c) => {
 // ---------------- quiz ----------------
 app.post("/api/quiz/generate", requireAuth, async (c) => {
   const user = c.get("user");
-  const { knowledgePointId, difficulty, count } = (await c.req.json().catch(() => ({}))) || {};
+  const { knowledgePointId } = (await c.req.json().catch(() => ({}))) || {};
   const kp = await c.env.DB.prepare("SELECT * FROM knowledge_points WHERE id = ? AND student_id = ?").bind(knowledgePointId, user.id).first<any>();
   if (!kp) return c.json({ error: "找不到這個知識點" }, 404);
 
   const doc = await c.env.DB.prepare("SELECT raw_text FROM documents WHERE id = ?").bind(kp.document_id).first<any>();
   const sourceExcerpt = doc?.raw_text || kp.title;
 
-  const questions = await generateQuestions(kp.title, sourceExcerpt, difficulty || "basic", count || 3, c.env.GEMINI_API_KEY);
+  const { questions, aiAvailable } = await generateQuestions(kp.title, sourceExcerpt, c.env.GEMINI_API_KEY);
   const saved = [];
   for (const q of questions) {
     const id = newId("q");
     await c.env.DB.prepare(
       "INSERT INTO questions (id, knowledge_point_id, student_id, difficulty, type, content, options, answer, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
     )
-      .bind(id, kp.id, user.id, difficulty || "basic", q.type, q.content, JSON.stringify(q.options), q.answer, nowIso())
+      .bind(id, kp.id, user.id, "general", q.type, q.content, JSON.stringify(q.options), q.answer, nowIso())
       .run();
     saved.push({ id, type: q.type, content: q.content, options: q.options });
   }
 
-  return c.json({ questions: saved, knowledgePointTitle: kp.title });
+  return c.json({ questions: saved, knowledgePointTitle: kp.title, aiAvailable });
 });
 
 app.post("/api/quiz/submit", requireAuth, async (c) => {

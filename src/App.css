@@ -214,10 +214,26 @@ textarea {
   color: #aab0bb;
   font-size: 13px;
   padding-top: 28px;
+  align-self: stretch;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .upload-method textarea {
   width: 100%;
+}
+
+@media (max-width: 640px) {
+  .upload-methods {
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .upload-divider {
+    padding-top: 0;
+    margin: 6px 0;
+  }
 }
 
 .kp-list {

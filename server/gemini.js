@@ -126,115 +126,44 @@ function fallbackReviewPlan(tasks) {
   return suggestions;
 }
 
-// 3. AI 出題：根據原文內容出題，確保題目能真正達到複習效果
-export async function generateQuestions(topicTitle, sourceExcerpt, difficulty, count = 3) {
+const QUESTION_COUNT = 8;
+
+// 3. AI 出題：一次針對整個知識點的原文內容出一份完整題目（不分難度等級）。
+// AI 暫時無法使用時不會生成假題目，而是誠實回報，讓前端顯示清楚的提示。
+export async function generateQuestions(topicTitle, sourceExcerpt) {
   try {
-    const diffLabel = { basic: "基礎題", advanced: "提升題", extension: "拓展題" }[difficulty] || "基礎題";
     const prompt = `你是出題老師。這是學生正在複習的知識點：「${topicTitle}」。
 以下是這份學習文件的原文內容，請你只根據這段原文出題，不要用原文沒提到的知識，確保學生只要讀懂這段原文就能答對：
 """
-${(sourceExcerpt || topicTitle).slice(0, 4000)}
+${(sourceExcerpt || topicTitle).slice(0, 6000)}
 """
 
-請針對「${topicTitle}」這個知識點，從上面的原文出 ${count} 題${diffLabel}（繁體中文，適合中小學生，用來複習剛才讀過的內容）。
+請針對「${topicTitle}」這個知識點，從上面的原文出一份完整的練習題，涵蓋這個知識點裡所有值得複習的重點，總共 ${QUESTION_COUNT} 題（繁體中文，適合中小學生）。
+題目難度不用分級，但整體要從基本概念到比較需要理解的部分都覆蓋到。
 每題包含：
 - type："choice" 或 "short"
-- content：題目文字，必須是原文裡真的有講到的內容，不可以問原文沒提到的事
+- content：完整的題目句子，必須是原文裡真的有講到的內容，不可以問原文沒提到的事，絕對不可以用「＿＿＿」「____」「請填空」這種挖空題格式
 - options：如果是 choice，提供 4 個選項的字串陣列（1 個正確、3 個似是而非的干擾選項）；如果是 short，給 null
 - answer：正確答案（choice 給正確選項的文字；short 給簡短但明確的參考答案，必須能在原文中找到依據）
 
 只回傳 JSON 陣列，不要有其他文字。`;
     const data = await callJsonModel(prompt);
     if (Array.isArray(data) && data.length > 0) {
-      return data.map((q) => ({
-        type: q.type === "choice" ? "choice" : "short",
-        content: String(q.content || "請簡述重點。"),
-        options: q.type === "choice" && Array.isArray(q.options) ? q.options.map(String) : null,
-        answer: String(q.answer || ""),
-      }));
+      return {
+        aiAvailable: true,
+        questions: data.map((q) => ({
+          type: q.type === "choice" ? "choice" : "short",
+          content: String(q.content || "請簡述重點。"),
+          options: q.type === "choice" && Array.isArray(q.options) ? q.options.map(String) : null,
+          answer: String(q.answer || ""),
+        })),
+      };
     }
     throw new Error("empty result");
   } catch (err) {
-    console.warn("[gemini] generateQuestions 改用備用邏輯：", err.message);
-    return fallbackQuestions(topicTitle, sourceExcerpt || topicTitle, count);
+    console.warn("[gemini] generateQuestions 失敗，暫不出題：", err.message);
+    return { questions: [], aiAvailable: false };
   }
-}
-
-// AI 無法使用時的備用出題邏輯：從原文裡真的找出跟知識點相關的句子，挖空成填空題
-function fallbackQuestions(topicTitle, sourceExcerpt, count) {
-  const cleanExcerpt = sourceExcerpt
-    .split("\n")
-    .filter((line) => !/^【投影片\s*\d+】$/.test(line.trim()))
-    .join("\n")
-    .replace(/[ \t]+/g, " ");
-  const sentences = cleanExcerpt
-    .split(/[。！？\n]/)
-    .map((s) => s.trim())
-    .filter((s) => s.length >= 6 && s.length <= 120);
-
-  const titleKeywords = topicTitle
-    .replace(/[【】：:，,。.]/g, " ")
-    .split(/\s+/)
-    .filter((w) => w.length >= 2);
-
-  const relevant = sentences.filter((s) => titleKeywords.some((kw) => s.includes(kw)) || s.includes(topicTitle));
-  // 去除重複句子，避免題目重複出現
-  const pool = [...new Set(relevant.length > 0 ? relevant : sentences)];
-
-  const out = [];
-  for (let i = 0; i < count && i < pool.length; i++) {
-    const sentence = pool[i];
-    const blanked = blankOutKeyTerm(sentence, titleKeywords);
-    if (blanked) {
-      out.push({ type: "short", content: `請填空：${blanked.text}`, options: null, answer: blanked.answer });
-    } else {
-      out.push({ type: "short", content: `請簡述以下內容的重點：「${sentence}」`, options: null, answer: sentence });
-    }
-  }
-
-  while (out.length < count) {
-    out.push({
-      type: "short",
-      content: `請簡述「${topicTitle}」的重點（第 ${out.length + 1} 題，目前 AI 暫時無法連線，建議稍後再試一次以取得更精準的題目）。`,
-      options: null,
-      answer: topicTitle,
-    });
-  }
-
-  return out;
-}
-
-const ENGLISH_STOPWORDS = new Set(["the", "a", "an", "is", "are", "was", "were", "of", "to", "in", "on", "at", "and", "or", "by", "with", "for"]);
-
-function blankOutKeyTerm(sentence, keywords) {
-  const hit = keywords.find((kw) => sentence.includes(kw));
-  if (hit) {
-    return { text: sentence.replace(hit, "＿＿＿＿"), answer: hit };
-  }
-
-  const hasCJK = /[一-鿿]/.test(sentence);
-  if (!hasCJK) {
-    const words = sentence.split(/\s+/);
-    const candidates = words
-      .map((w, i) => ({ word: w.replace(/[.,;:!?]+$/, ""), i }))
-      .filter((w) => w.word.length >= 4 && !ENGLISH_STOPWORDS.has(w.word.toLowerCase()));
-    if (candidates.length > 0) {
-      const pick = candidates[Math.floor(candidates.length / 2)];
-      const blankedWords = words.slice();
-      blankedWords[pick.i] = blankedWords[pick.i].replace(pick.word, "____");
-      return { text: blankedWords.join(" "), answer: pick.word };
-    }
-    return null;
-  }
-
-  if (sentence.length >= 12) {
-    const start = Math.floor(sentence.length / 2) - 2;
-    const term = sentence.slice(start, start + 4);
-    if (term.trim().length >= 2) {
-      return { text: sentence.slice(0, start) + "＿＿＿＿" + sentence.slice(start + 4), answer: term };
-    }
-  }
-  return null;
 }
 
 // 4. AI 批改（簡答題用）

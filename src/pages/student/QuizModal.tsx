@@ -10,19 +10,23 @@ export function QuizModal({
   onClose: () => void;
   onFinished: () => void;
 }) {
-  const [difficulty, setDifficulty] = useState("basic");
   const [questions, setQuestions] = useState<Question[]>([]);
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [results, setResults] = useState<Record<string, { isCorrect: boolean; feedback: string }>>({});
   const [loading, setLoading] = useState(false);
+  const [aiUnavailable, setAiUnavailable] = useState(false);
+  const [hasGenerated, setHasGenerated] = useState(false);
 
   async function generate() {
     setLoading(true);
+    setAiUnavailable(false);
     try {
-      const r = await api.generateQuiz({ knowledgePointId: knowledgePoint.id, difficulty, count: 3 });
+      const r = await api.generateQuiz({ knowledgePointId: knowledgePoint.id });
       setQuestions(r.questions);
       setAnswers({});
       setResults({});
+      setAiUnavailable(!r.aiAvailable);
+      setHasGenerated(true);
     } finally {
       setLoading(false);
     }
@@ -38,16 +42,17 @@ export function QuizModal({
     <div className="modal-backdrop" onClick={onClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
         <h3>出題練習：{knowledgePoint.title}</h3>
-        <div className="row">
-          <select value={difficulty} onChange={(e) => setDifficulty(e.target.value)}>
-            <option value="basic">基礎題</option>
-            <option value="advanced">提升題</option>
-            <option value="extension">拓展題</option>
-          </select>
-          <button onClick={generate} disabled={loading}>
-            {loading ? "出題中..." : "產生題目"}
-          </button>
-        </div>
+        <p className="hint">會根據您上傳的文件內容，一次出一份完整的練習題（不分難度）。</p>
+
+        <button className="primary" onClick={generate} disabled={loading}>
+          {loading ? "出題中...（可能需要十幾秒，請耐心等候）" : hasGenerated ? "重新出題" : "產生題目"}
+        </button>
+
+        {aiUnavailable && (
+          <p className="error">
+            目前 AI 暫時無法連線（可能是流量較高），沒有辦法產生題目，請稍後再按一次「重新出題」試試看。
+          </p>
+        )}
 
         {questions.map((q) => (
           <div key={q.id} className="question">

@@ -86,8 +86,11 @@ export const api = {
     request<{ tasks: Task[] }>("/calendar/auto-generate", { method: "POST", body: JSON.stringify(body) }),
   getStress: () => request<{ level: string; reason: string; completionRate: number; overloadDays: number }>("/calendar/stress"),
 
-  generateQuiz: (body: { knowledgePointId: string; difficulty: string; count: number }) =>
-    request<{ questions: Question[]; knowledgePointTitle: string }>("/quiz/generate", { method: "POST", body: JSON.stringify(body) }),
+  generateQuiz: (body: { knowledgePointId: string }) =>
+    request<{ questions: Question[]; knowledgePointTitle: string; aiAvailable: boolean }>("/quiz/generate", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
   submitQuiz: (body: { questionId: string; answer: string; taskId?: string }) =>
     request<{ isCorrect: boolean; feedback: string; correctAnswer: string }>("/quiz/submit", {
       method: "POST",

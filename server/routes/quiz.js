@@ -12,24 +12,24 @@ function nowIso() {
 }
 
 quizRouter.post("/generate", async (req, res) => {
-  const { knowledgePointId, difficulty, count } = req.body || {};
+  const { knowledgePointId } = req.body || {};
   const kp = db.prepare("SELECT * FROM knowledge_points WHERE id = ? AND student_id = ?").get(knowledgePointId, req.user.id);
   if (!kp) return res.status(404).json({ error: "找不到這個知識點" });
 
   const doc = db.prepare("SELECT raw_text FROM documents WHERE id = ?").get(kp.document_id);
   const sourceExcerpt = doc?.raw_text || kp.title;
 
-  const questions = await generateQuestions(kp.title, sourceExcerpt, difficulty || "basic", count || 3);
+  const { questions, aiAvailable } = await generateQuestions(kp.title, sourceExcerpt);
   const insert = db.prepare(
     "INSERT INTO questions (id, knowledge_point_id, student_id, difficulty, type, content, options, answer, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
   );
   const saved = questions.map((q) => {
     const id = `q_${nanoid(10)}`;
-    insert.run(id, kp.id, req.user.id, difficulty || "basic", q.type, q.content, JSON.stringify(q.options), q.answer, nowIso());
+    insert.run(id, kp.id, req.user.id, "general", q.type, q.content, JSON.stringify(q.options), q.answer, nowIso());
     return { id, type: q.type, content: q.content, options: q.options };
   });
 
-  res.json({ questions: saved, knowledgePointTitle: kp.title });
+  res.json({ questions: saved, knowledgePointTitle: kp.title, aiAvailable });
 });
 
 quizRouter.post("/submit", async (req, res) => {
