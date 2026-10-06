@@ -4,19 +4,26 @@ import { nanoid } from "nanoid";
 import { db } from "../db.js";
 import { requireAuth } from "../middleware/auth.js";
 import { parseDocumentToKnowledgePoints } from "../gemini.js";
+import { extractTextFromFile, UnsupportedFileError } from "../documentParser.js";
 
 export const documentsRouter = express.Router();
-const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } });
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 
 documentsRouter.use(requireAuth);
 
-// 上傳文件（目前接受文字內容；PDF/Word 的文字擷取留在後續完善）
+// 上傳文件：支援 PDF、PowerPoint（.pptx），或直接貼上文字
 documentsRouter.post("/upload", upload.single("file"), async (req, res) => {
   const studentId = req.user.id;
   const subject = (req.body?.subject || "未分類").trim().slice(0, 20) || "未分類";
   let rawText = req.body?.text || "";
   if (req.file) {
-    rawText = req.file.buffer.toString("utf-8");
+    try {
+      rawText = await extractTextFromFile(req.file.originalname, req.file.mimetype, req.file.buffer);
+    } catch (err) {
+      if (err instanceof UnsupportedFileError) return res.status(400).json({ error: err.message });
+      console.error("[documents] 檔案解析失敗：", err);
+      return res.status(400).json({ error: "檔案解析失敗，請確認檔案沒有損壞" });
+    }
   }
   if (!rawText || rawText.trim().length < 10) {
     return res.status(400).json({ error: "文件內容太短，請確認上傳的檔案或貼上的文字" });

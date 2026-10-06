@@ -3,6 +3,7 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 const apiKey = process.env.GEMINI_API_KEY;
 const genAI = apiKey ? new GoogleGenerativeAI(apiKey) : null;
 const MODEL_NAME = "gemini-3.8-flash";
+const TIMEOUT_MS = 20000;
 
 function getModel() {
   if (!genAI) return null;
@@ -14,8 +15,6 @@ function extractJson(text) {
   if (!match) throw new Error("no json found in model output");
   return JSON.parse(match[0]);
 }
-
-const TIMEOUT_MS = 12000;
 
 function withTimeout(promise, ms) {
   return Promise.race([
@@ -32,16 +31,26 @@ async function callJsonModel(prompt) {
   return extractJson(text);
 }
 
-// 1. 文件解析：把原始文字拆成知識點
+// 1. 文件解析：把原始文字（含 PDF/PPT 擷取出來的文字）拆成知識點
 export async function parseDocumentToKnowledgePoints(rawText) {
   try {
-    const prompt = `你是中小學教學助理。閱讀以下教學文件內容，拆解出 5 到 12 個知識點。
-每個知識點要有：title（簡短的知識點名稱，繁體中文）、level（必學 / 熟練 / 了解 三選一）、estMinutes（建議學習分鐘數，20 到 60 之間的整數）。
-只回傳 JSON 陣列，不要有其他文字。
+    const prompt = `你是中小學教學助理，正在幫學生整理一份教學文件（可能是課本內容、也可能是從 PowerPoint 投影片擷取出來、比較零碎的條列文字）。
+
+請你：
+1. 先在腦中把零碎的條列、標題、投影片片段重新組織成完整的概念（同一個主題如果分散在好幾行／好幾張投影片，要合併成一個知識點，不要重複列出）。
+2. 忽略頁碼、投影片編號、「謝謝聆聽」之類的版面裝飾文字。
+3. 拆解出 5 到 12 個「實際的學習重點」，每個都必須是文件裡真的有教到的具體概念，不可以是籠統的大標題（例如不要只寫「第三章」，要寫這章實際教了什麼）。
+
+每個知識點要有：
+- title：具體、簡短的知識點名稱（繁體中文，15 字以內）
+- level：這個概念的重要程度，"必學"（考試核心、一定要會）、"熟練"（需要多練習）、"了解"（背景知識、認識即可）三選一
+- estMinutes：合理的學習時間（20 到 60 之間的整數分鐘）
+
+只回傳 JSON 陣列，不要有其他文字或 Markdown 符號。
 
 文件內容：
 """
-${rawText.slice(0, 6000)}
+${rawText.slice(0, 12000)}
 """`;
     const data = await callJsonModel(prompt);
     if (Array.isArray(data) && data.length > 0) {
@@ -59,15 +68,26 @@ ${rawText.slice(0, 6000)}
 }
 
 function fallbackParseDocument(rawText) {
+  const junkPatterns = [/^第?\s*\d+\s*頁$/, /^\d+$/, /^【投影片\s*\d+】?$/, /^謝謝/, /^thank you/i, /^page\s*\d+/i];
+
+  const seen = new Set();
   const lines = rawText
     .split(/\r?\n/)
-    .map((l) => l.trim())
-    .filter((l) => l.length >= 4 && l.length <= 60)
+    .map((l) => l.replace(/^【投影片\s*\d+】/, "").trim())
+    .filter((l) => l.length >= 6 && l.length <= 100)
+    .filter((l) => !junkPatterns.some((p) => p.test(l)))
+    .filter((l) => {
+      const key = l.slice(0, 12);
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
     .slice(0, 8);
-  const base = lines.length > 0 ? lines : ["本文件的主要內容（請老師協助確認細項）"];
+
+  const base = lines.length > 0 ? lines : ["本文件的主要內容（AI 暫時無法自動分析，請老師協助確認細項）"];
   const levels = ["必學", "熟練", "了解"];
   return base.map((title, i) => ({
-    title,
+    title: title.length > 40 ? title.slice(0, 40) + "…" : title,
     level: levels[i % levels.length],
     estMinutes: 30,
   }));
@@ -106,13 +126,24 @@ function fallbackReviewPlan(tasks) {
   return suggestions;
 }
 
-// 3. AI 出題
-export async function generateQuestions(topicTitle, difficulty, count = 3) {
+// 3. AI 出題：根據原文內容出題，確保題目能真正達到複習效果
+export async function generateQuestions(topicTitle, sourceExcerpt, difficulty, count = 3) {
   try {
     const diffLabel = { basic: "基礎題", advanced: "提升題", extension: "拓展題" }[difficulty] || "基礎題";
-    const prompt = `你是出題老師。針對知識點「${topicTitle}」，出 ${count} 題${diffLabel}（繁體中文，適合中小學生）。
-每題包含：type（"choice" 或 "short"）、content（題目文字）、options（如果是 choice，提供 4 個選項的字串陣列；如果是 short，給 null）、answer（正確答案；choice 給正確選項文字，short 給簡短參考答案）。
-只回傳 JSON 陣列。`;
+    const prompt = `你是出題老師。這是學生正在複習的知識點：「${topicTitle}」。
+以下是這份學習文件的原文內容，請你只根據這段原文出題，不要用原文沒提到的知識，確保學生只要讀懂這段原文就能答對：
+"""
+${(sourceExcerpt || topicTitle).slice(0, 4000)}
+"""
+
+請針對「${topicTitle}」這個知識點，從上面的原文出 ${count} 題${diffLabel}（繁體中文，適合中小學生，用來複習剛才讀過的內容）。
+每題包含：
+- type："choice" 或 "short"
+- content：題目文字，必須是原文裡真的有講到的內容，不可以問原文沒提到的事
+- options：如果是 choice，提供 4 個選項的字串陣列（1 個正確、3 個似是而非的干擾選項）；如果是 short，給 null
+- answer：正確答案（choice 給正確選項的文字；short 給簡短但明確的參考答案，必須能在原文中找到依據）
+
+只回傳 JSON 陣列，不要有其他文字。`;
     const data = await callJsonModel(prompt);
     if (Array.isArray(data) && data.length > 0) {
       return data.map((q) => ({
@@ -125,21 +156,85 @@ export async function generateQuestions(topicTitle, difficulty, count = 3) {
     throw new Error("empty result");
   } catch (err) {
     console.warn("[gemini] generateQuestions 改用備用邏輯：", err.message);
-    return fallbackQuestions(topicTitle, count);
+    return fallbackQuestions(topicTitle, sourceExcerpt || topicTitle, count);
   }
 }
 
-function fallbackQuestions(topicTitle, count) {
+// AI 無法使用時的備用出題邏輯：從原文裡真的找出跟知識點相關的句子，挖空成填空題
+function fallbackQuestions(topicTitle, sourceExcerpt, count) {
+  const cleanExcerpt = sourceExcerpt
+    .split("\n")
+    .filter((line) => !/^【投影片\s*\d+】$/.test(line.trim()))
+    .join("\n")
+    .replace(/[ \t]+/g, " ");
+  const sentences = cleanExcerpt
+    .split(/[。！？\n]/)
+    .map((s) => s.trim())
+    .filter((s) => s.length >= 6 && s.length <= 120);
+
+  const titleKeywords = topicTitle
+    .replace(/[【】：:，,。.]/g, " ")
+    .split(/\s+/)
+    .filter((w) => w.length >= 2);
+
+  const relevant = sentences.filter((s) => titleKeywords.some((kw) => s.includes(kw)) || s.includes(topicTitle));
+  // 去除重複句子，避免題目重複出現
+  const pool = [...new Set(relevant.length > 0 ? relevant : sentences)];
+
   const out = [];
-  for (let i = 0; i < count; i++) {
+  for (let i = 0; i < count && i < pool.length; i++) {
+    const sentence = pool[i];
+    const blanked = blankOutKeyTerm(sentence, titleKeywords);
+    if (blanked) {
+      out.push({ type: "short", content: `請填空：${blanked.text}`, options: null, answer: blanked.answer });
+    } else {
+      out.push({ type: "short", content: `請簡述以下內容的重點：「${sentence}」`, options: null, answer: sentence });
+    }
+  }
+
+  while (out.length < count) {
     out.push({
       type: "short",
-      content: `請簡述「${topicTitle}」的重點（第 ${i + 1} 題）。`,
+      content: `請簡述「${topicTitle}」的重點（第 ${out.length + 1} 題，目前 AI 暫時無法連線，建議稍後再試一次以取得更精準的題目）。`,
       options: null,
       answer: topicTitle,
     });
   }
+
   return out;
+}
+
+const ENGLISH_STOPWORDS = new Set(["the", "a", "an", "is", "are", "was", "were", "of", "to", "in", "on", "at", "and", "or", "by", "with", "for"]);
+
+function blankOutKeyTerm(sentence, keywords) {
+  const hit = keywords.find((kw) => sentence.includes(kw));
+  if (hit) {
+    return { text: sentence.replace(hit, "＿＿＿＿"), answer: hit };
+  }
+
+  const hasCJK = /[一-鿿]/.test(sentence);
+  if (!hasCJK) {
+    const words = sentence.split(/\s+/);
+    const candidates = words
+      .map((w, i) => ({ word: w.replace(/[.,;:!?]+$/, ""), i }))
+      .filter((w) => w.word.length >= 4 && !ENGLISH_STOPWORDS.has(w.word.toLowerCase()));
+    if (candidates.length > 0) {
+      const pick = candidates[Math.floor(candidates.length / 2)];
+      const blankedWords = words.slice();
+      blankedWords[pick.i] = blankedWords[pick.i].replace(pick.word, "____");
+      return { text: blankedWords.join(" "), answer: pick.word };
+    }
+    return null;
+  }
+
+  if (sentence.length >= 12) {
+    const start = Math.floor(sentence.length / 2) - 2;
+    const term = sentence.slice(start, start + 4);
+    if (term.trim().length >= 2) {
+      return { text: sentence.slice(0, start) + "＿＿＿＿" + sentence.slice(start + 4), answer: term };
+    }
+  }
+  return null;
 }
 
 // 4. AI 批改（簡答題用）
@@ -158,7 +253,17 @@ export async function gradeAnswer(question, studentAnswer) {
     return { isCorrect: Boolean(data.isCorrect), feedback: String(data.feedback || "") };
   } catch (err) {
     console.warn("[gemini] gradeAnswer 改用備用邏輯：", err.message);
-    const loose = String(studentAnswer || "").trim().length > 0;
-    return { isCorrect: loose, feedback: loose ? "已收到您的回答，老師會再確認細節。" : "這題還沒有作答。" };
+    const normalizedAnswer = String(question.answer || "").trim();
+    const normalizedStudent = String(studentAnswer || "").trim();
+    const isCorrect = normalizedAnswer.length > 0 && normalizedStudent.length > 0 && normalizedStudent.includes(normalizedAnswer);
+    return {
+      isCorrect,
+      feedback:
+        normalizedStudent.length === 0
+          ? "這題還沒有作答。"
+          : isCorrect
+            ? "答對了！"
+            : `提示：參考答案是「${normalizedAnswer}」，AI 暫時無法連線，請自行與老師確認細節。`,
+    };
   }
 }

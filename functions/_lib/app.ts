@@ -6,6 +6,7 @@ import { todayLocalStr, addDays } from "./dateUtils";
 import { generateAutoSchedule } from "./scheduler";
 import { computeStressLevel, logStress, hasRecentHighStressStreak } from "./stress";
 import { parseDocumentToKnowledgePoints, reviewManualPlan, generateQuestions, gradeAnswer } from "./gemini";
+import { extractTextFromFile, UnsupportedFileError } from "./documentParser";
 
 const app = new Hono<{ Bindings: Env; Variables: AuthVars }>();
 
@@ -112,14 +113,36 @@ app.post("/api/auth/join-class", async (c) => {
 // ---------------- documents ----------------
 app.post("/api/documents/upload", requireAuth, async (c) => {
   const user = c.get("user");
-  const body = await c.req.json().catch(() => ({}));
-  const subject = (body?.subject || "未分類").trim().slice(0, 20) || "未分類";
-  const rawText: string = body?.text || "";
-  if (!rawText || rawText.trim().length < 10) return c.json({ error: "文件內容太短，請確認貼上的文字" }, 400);
+  const contentType = c.req.header("content-type") || "";
+
+  let subject = "未分類";
+  let rawText = "";
+  let filename = "手動貼上的文字";
+
+  if (contentType.includes("multipart/form-data")) {
+    const form = await c.req.parseBody();
+    const file = form["file"];
+    subject = (String(form["subject"] || "未分類").trim().slice(0, 20)) || "未分類";
+    if (!(file instanceof File)) return c.json({ error: "請選擇要上傳的檔案" }, 400);
+    filename = file.name;
+    try {
+      rawText = await extractTextFromFile(file.name, file.type, await file.arrayBuffer());
+    } catch (err) {
+      if (err instanceof UnsupportedFileError) return c.json({ error: err.message }, 400);
+      console.error("[documents] 檔案解析失敗：", err);
+      return c.json({ error: "檔案解析失敗，請確認檔案沒有損壞" }, 400);
+    }
+  } else {
+    const body = await c.req.json().catch(() => ({}));
+    subject = (body?.subject || "未分類").trim().slice(0, 20) || "未分類";
+    rawText = body?.text || "";
+  }
+
+  if (!rawText || rawText.trim().length < 10) return c.json({ error: "文件內容太短，請確認貼上的文字或上傳的檔案" }, 400);
 
   const docId = newId("doc");
   await c.env.DB.prepare("INSERT INTO documents (id, student_id, filename, raw_text, created_at) VALUES (?, ?, ?, ?, ?)")
-    .bind(docId, user.id, "手動貼上的文字", rawText, nowIso())
+    .bind(docId, user.id, filename, rawText, nowIso())
     .run();
 
   const knowledgePoints = await parseDocumentToKnowledgePoints(rawText, c.env.GEMINI_API_KEY);
@@ -302,7 +325,10 @@ app.post("/api/quiz/generate", requireAuth, async (c) => {
   const kp = await c.env.DB.prepare("SELECT * FROM knowledge_points WHERE id = ? AND student_id = ?").bind(knowledgePointId, user.id).first<any>();
   if (!kp) return c.json({ error: "找不到這個知識點" }, 404);
 
-  const questions = await generateQuestions(kp.title, difficulty || "basic", count || 3, c.env.GEMINI_API_KEY);
+  const doc = await c.env.DB.prepare("SELECT raw_text FROM documents WHERE id = ?").bind(kp.document_id).first<any>();
+  const sourceExcerpt = doc?.raw_text || kp.title;
+
+  const questions = await generateQuestions(kp.title, sourceExcerpt, difficulty || "basic", count || 3, c.env.GEMINI_API_KEY);
   const saved = [];
   for (const q of questions) {
     const id = newId("q");

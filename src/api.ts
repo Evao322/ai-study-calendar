@@ -60,6 +60,15 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ text, subject }),
     }),
+  uploadDocumentFile: (file: File, subject: string) => {
+    const form = new FormData();
+    form.append("file", file);
+    form.append("subject", subject);
+    return request<{ documentId: string; knowledgePoints: KnowledgePoint[] }>("/documents/upload", {
+      method: "POST",
+      body: form,
+    });
+  },
   getKnowledgePoints: () => request<{ knowledgePoints: KnowledgePoint[] }>("/documents/knowledge-points"),
 
   getTasks: (from?: string, to?: string) =>

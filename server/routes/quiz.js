@@ -16,7 +16,10 @@ quizRouter.post("/generate", async (req, res) => {
   const kp = db.prepare("SELECT * FROM knowledge_points WHERE id = ? AND student_id = ?").get(knowledgePointId, req.user.id);
   if (!kp) return res.status(404).json({ error: "找不到這個知識點" });
 
-  const questions = await generateQuestions(kp.title, difficulty || "basic", count || 3);
+  const doc = db.prepare("SELECT raw_text FROM documents WHERE id = ?").get(kp.document_id);
+  const sourceExcerpt = doc?.raw_text || kp.title;
+
+  const questions = await generateQuestions(kp.title, sourceExcerpt, difficulty || "basic", count || 3);
   const insert = db.prepare(
     "INSERT INTO questions (id, knowledge_point_id, student_id, difficulty, type, content, options, answer, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
   );
