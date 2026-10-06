@@ -1,6 +1,9 @@
 name = "ai-study-calendar"
 compatibility_date = "2026-10-06"
+compatibility_flags = ["nodejs_compat"]
 pages_build_output_dir = "dist"
 
-# 這個檔案是給 Cloudflare Pages 部署用的設定，階段 5（正式部署上線）才會真正用到。
-# 資料庫（D1）的設定會在進入階段 5 時，跟著部署教學一起補上。
+[[d1_databases]]
+binding = "DB"
+database_name = "ai-study-calendar-db"
+database_id = "b8aa6233-aff4-4aaf-a21f-8b2d98c92a07"
