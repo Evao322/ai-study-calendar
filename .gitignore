@@ -1,0 +1,27 @@
+# 相依套件與建置產物
+node_modules
+server/node_modules
+dist
+.wrangler
+tsconfig.tsbuildinfo
+
+# 金鑰、密碼、環境變數（絕對不能上傳）
+.env
+.env.*
+server/.env
+server/.env.*
+*.pem
+*.key
+*secret*
+*credential*
+
+# 本機資料庫（含真實測試資料，不應上傳）
+server/data.db
+server/data.db-journal
+server/data.db-wal
+server/data.db-shm
+
+# 編輯器與系統雜項檔案
+.DS_Store
+Thumbs.db
+*.local
