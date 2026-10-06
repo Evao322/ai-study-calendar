@@ -1,6 +1,7 @@
 # AI 智能學習日曆
 
-**正式網址：https://ai-study-calendar.pages.dev**（Cloudflare Pages + D1，任何人都可以用這個網址直接使用）
+**正式網址：https://ai-study-calendar.pages.dev**
+（Cloudflare Pages + D1，任何人都可以用這個網址直接使用）
 
 ## 以後怎麼發布新版本
 
