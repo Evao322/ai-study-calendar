@@ -1,17 +1,36 @@
 import { useEffect, useState } from "react";
 import { api, type AuthUser, type StudentOverview, type Task } from "../api";
+import { translateLabel, useLanguage } from "../i18n";
+import { LanguageToggle } from "../LanguageToggle";
+import { CheckIcon, CopyIcon } from "../icons";
 
 export function TeacherDashboard({ user, onLogout }: { user: AuthUser; onLogout: () => void }) {
+  const { t } = useLanguage();
   const [classes, setClasses] = useState<{ id: string; name: string; code: string }[]>([]);
   const [selectedClassId, setSelectedClassId] = useState<string | null>(null);
   const [students, setStudents] = useState<StudentOverview[]>([]);
   const [newClassName, setNewClassName] = useState("");
+  const [copied, setCopied] = useState(false);
   const [selectedStudent, setSelectedStudent] = useState<{
     student: { id: string; name: string; grade: string };
     tasks: Task[];
     weakPoints: { title: string; wrongCount: number }[];
     stress: { level: string; reason: string };
   } | null>(null);
+
+  const selectedClass = classes.find((c) => c.id === selectedClassId) || null;
+
+  async function copyClassCode() {
+    if (!selectedClass) return;
+    try {
+      await navigator.clipboard.writeText(selectedClass.code);
+    } catch {
+      // clipboard API unavailable; fail silently, button simply won't confirm
+      return;
+    }
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  }
 
   async function loadClasses() {
     const r = await api.getClasses();
@@ -49,43 +68,70 @@ export function TeacherDashboard({ user, onLogout }: { user: AuthUser; onLogout:
     <div className="dashboard">
       <header className="dashboard-header">
         <div>
-          <h1>AI 智能學習日曆</h1>
-          <p className="subtitle">{user.name}（老師）</p>
+          <h1>{t("appTitle")}</h1>
+          <p className="subtitle">
+            {user.name}
+            {t("teacherSuffix")}
+          </p>
         </div>
-        <button onClick={onLogout}>登出</button>
+        <div className="row" style={{ margin: 0 }}>
+          <LanguageToggle />
+          <button onClick={onLogout}>{t("logout")}</button>
+        </div>
       </header>
 
       <section className="card">
-        <h2>班級管理</h2>
+        <h2>{t("classManagement")}</h2>
         <div className="row">
-          <input placeholder="新班級名稱，例如：五年一班" value={newClassName} onChange={(e) => setNewClassName(e.target.value)} />
-          <button onClick={createClass}>建立班級</button>
+          <input
+            placeholder={t("newClassPlaceholder")}
+            value={newClassName}
+            onChange={(e) => setNewClassName(e.target.value)}
+          />
+          <button onClick={createClass}>{t("createClass")}</button>
         </div>
 
         {classes.length > 0 && (
           <div className="row">
-            <select value={selectedClassId || ""} onChange={(e) => setSelectedClassId(e.target.value)}>
+            <select
+              value={selectedClassId || ""}
+              onChange={(e) => {
+                setSelectedClassId(e.target.value);
+                setCopied(false);
+              }}
+            >
               {classes.map((c) => (
                 <option key={c.id} value={c.id}>
-                  {c.name}（班級碼：{c.code}）
+                  {c.name}（{t("classCodeLabel")}：{c.code}）
                 </option>
               ))}
             </select>
+            {selectedClass && (
+              <div className="class-code-row">
+                <span className="hint">
+                  {t("classCodeLabel")}：<strong>{selectedClass.code}</strong>
+                </span>
+                <button className={`copy-code-btn ${copied ? "copied" : ""}`} onClick={copyClassCode}>
+                  {copied ? <CheckIcon /> : <CopyIcon />}
+                  {copied ? t("copiedCode") : t("copyCode")}
+                </button>
+              </div>
+            )}
           </div>
         )}
       </section>
 
       <section className="card">
-        <h2>全班學情總覽</h2>
-        {students.length === 0 && <p className="hint">目前這個班級還沒有學生加入。請把班級碼交給學生，讓他們註冊時填入。</p>}
+        <h2>{t("classOverview")}</h2>
+        {students.length === 0 && <p className="hint">{t("noStudentsHint")}</p>}
         {students.length > 0 && (
           <table className="overview-table">
             <thead>
               <tr>
-                <th>姓名</th>
-                <th>年級</th>
-                <th>近 7 天完成率</th>
-                <th>壓力狀態</th>
+                <th>{t("colName")}</th>
+                <th>{t("colGrade")}</th>
+                <th>{t("colCompletion")}</th>
+                <th>{t("colStress")}</th>
                 <th></th>
               </tr>
             </thead>
@@ -94,14 +140,14 @@ export function TeacherDashboard({ user, onLogout }: { user: AuthUser; onLogout:
                 <tr key={s.id} className={s.needsAttention ? "attention" : ""}>
                   <td>{s.name}</td>
                   <td>{s.grade}</td>
-                  <td>{s.completionRate === null ? "尚無資料" : `${s.completionRate}%`}</td>
+                  <td>{s.completionRate === null ? t("noData") : `${s.completionRate}%`}</td>
                   <td>
-                    <span className={`level-tag ${s.stressLevel}`}>{s.stressLevel}</span>
-                    {s.needsAttention && <span className="attention-tag">需要關注</span>}
+                    <span className={`level-tag ${s.stressLevel}`}>{translateLabel(t, s.stressLevel)}</span>
+                    {s.needsAttention && <span className="attention-tag">{t("needsAttention")}</span>}
                   </td>
                   <td>
                     <button className="link" onClick={() => openStudent(s.id)}>
-                      查看詳情
+                      {t("viewDetails")}
                     </button>
                   </td>
                 </tr>
@@ -115,38 +161,41 @@ export function TeacherDashboard({ user, onLogout }: { user: AuthUser; onLogout:
         <div className="modal-backdrop" onClick={() => setSelectedStudent(null)}>
           <div className="modal" onClick={(e) => e.stopPropagation()}>
             <h3>
-              {selectedStudent.student.name} 的學習狀況（{selectedStudent.student.grade}）
+              {selectedStudent.student.name} {t("studentSuffix")}（{selectedStudent.student.grade}）
             </h3>
             <p>
-              壓力狀態：<span className={`level-tag ${selectedStudent.stress.level}`}>{selectedStudent.stress.level}</span>
+              {t("stressLabel")}
+              <span className={`level-tag ${selectedStudent.stress.level}`}>
+                {translateLabel(t, selectedStudent.stress.level)}
+              </span>
               　{selectedStudent.stress.reason}
             </p>
 
-            <h4>薄弱知識點</h4>
+            <h4>{t("weakPoints")}</h4>
             {selectedStudent.weakPoints.length === 0 ? (
-              <p className="hint">目前沒有明顯的薄弱知識點。</p>
+              <p className="hint">{t("noWeakPoints")}</p>
             ) : (
               <ul>
                 {selectedStudent.weakPoints.map((w, i) => (
                   <li key={i}>
-                    {w.title} — 錯了 {w.wrongCount} 次
+                    {w.title} — {t("wrongCount", { n: w.wrongCount })}
                   </li>
                 ))}
               </ul>
             )}
 
-            <h4>日曆任務</h4>
+            <h4>{t("calendarTasks")}</h4>
             <ul className="student-task-list">
-              {selectedStudent.tasks.map((t, i) => (
-                <li key={i} className={t.status === "done" ? "done" : ""}>
-                  {t.date} · {t.title}（{t.minutes} 分）
+              {selectedStudent.tasks.map((t2, i) => (
+                <li key={i} className={t2.status === "done" ? "done" : ""}>
+                  {t2.date} · {t2.title}（{t2.minutes} {t("minutesSuffix")}）
                 </li>
               ))}
-              {selectedStudent.tasks.length === 0 && <li className="hint">尚無任務</li>}
+              {selectedStudent.tasks.length === 0 && <li className="hint">{t("noTasks")}</li>}
             </ul>
 
             <button className="link" onClick={() => setSelectedStudent(null)}>
-              關閉
+              {t("close")}
             </button>
           </div>
         </div>

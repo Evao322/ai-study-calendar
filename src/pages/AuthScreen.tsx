@@ -1,7 +1,10 @@
 import { useState, type FormEvent } from "react";
 import { api, saveSession, type AuthUser } from "../api";
+import { useLanguage } from "../i18n";
+import { LanguageToggle } from "../LanguageToggle";
 
 export function AuthScreen({ onAuthed }: { onAuthed: (user: AuthUser) => void }) {
+  const { t } = useLanguage();
   const [role, setRole] = useState<"student" | "teacher">("student");
   const [mode, setMode] = useState<"login" | "register">("register");
   const [username, setUsername] = useState("");
@@ -38,57 +41,58 @@ export function AuthScreen({ onAuthed }: { onAuthed: (user: AuthUser) => void })
 
   return (
     <div className="auth-screen">
-      <h1>AI 智能學習日曆</h1>
-      <p className="subtitle">師生雙端 AI 智能學習管理工具</p>
+      <LanguageToggle />
+      <h1>{t("appTitle")}</h1>
+      <p className="subtitle">{t("authSubtitle")}</p>
 
       <div className="tabs">
         <button className={role === "student" ? "active" : ""} onClick={() => setRole("student")}>
-          我是學生
+          {t("roleStudent")}
         </button>
         <button className={role === "teacher" ? "active" : ""} onClick={() => setRole("teacher")}>
-          我是老師
+          {t("roleTeacher")}
         </button>
       </div>
 
       <div className="tabs secondary">
         <button className={mode === "register" ? "active" : ""} onClick={() => setMode("register")}>
-          註冊新帳號
+          {t("modeRegister")}
         </button>
         <button className={mode === "login" ? "active" : ""} onClick={() => setMode("login")}>
-          登入
+          {t("modeLogin")}
         </button>
       </div>
 
       <form onSubmit={submit} className="auth-form">
         <label>
-          帳號
+          {t("fieldUsername")}
           <input value={username} onChange={(e) => setUsername(e.target.value)} required />
         </label>
         {mode === "register" && (
           <label>
-            姓名
+            {t("fieldName")}
             <input value={name} onChange={(e) => setName(e.target.value)} required />
           </label>
         )}
         {mode === "register" && role === "student" && (
           <label>
-            年級
-            <input value={grade} onChange={(e) => setGrade(e.target.value)} placeholder="例如：五年級" />
+            {t("fieldGrade")}
+            <input value={grade} onChange={(e) => setGrade(e.target.value)} placeholder={t("fieldGradePlaceholder")} />
           </label>
         )}
         <label>
-          密碼
+          {t("fieldPassword")}
           <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
         </label>
         {mode === "register" && role === "student" && (
           <label>
-            班級碼（選填，老師會提供）
-            <input value={classCode} onChange={(e) => setClassCode(e.target.value)} placeholder="例如：CAB4DS" />
+            {t("fieldClassCode")}
+            <input value={classCode} onChange={(e) => setClassCode(e.target.value)} placeholder={t("fieldClassCodePlaceholder")} />
           </label>
         )}
         {error && <p className="error">{error}</p>}
         <button type="submit" className="primary" disabled={loading}>
-          {loading ? "處理中..." : mode === "register" ? "建立帳號" : "登入"}
+          {loading ? t("submitting") : mode === "register" ? t("submitCreate") : t("submitLogin")}
         </button>
       </form>
     </div>

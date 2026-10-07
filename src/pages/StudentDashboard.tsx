@@ -3,8 +3,11 @@ import { api, type AuthUser, type KnowledgePoint, type Task } from "../api";
 import { UploadTab } from "./student/UploadTab";
 import { CalendarView } from "./student/CalendarView";
 import { QuizModal } from "./student/QuizModal";
+import { translateLabel, useLanguage } from "../i18n";
+import { LanguageToggle } from "../LanguageToggle";
 
 export function StudentDashboard({ user, onLogout }: { user: AuthUser; onLogout: () => void }) {
+  const { t } = useLanguage();
   const [tab, setTab] = useState<"upload" | "calendar">("upload");
   const [knowledgePoints, setKnowledgePoints] = useState<KnowledgePoint[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -33,26 +36,32 @@ export function StudentDashboard({ user, onLogout }: { user: AuthUser; onLogout:
     <div className="dashboard">
       <header className="dashboard-header">
         <div>
-          <h1>AI 智能學習日曆</h1>
+          <h1>{t("appTitle")}</h1>
           <p className="subtitle">
-            {user.name}（學生）{user.grade ? ` · ${user.grade}` : ""}
+            {user.name}
+            {t("studentSuffix")}
+            {user.grade ? ` · ${user.grade}` : ""}
           </p>
         </div>
-        <button onClick={onLogout}>登出</button>
+        <div className="row" style={{ margin: 0 }}>
+          <LanguageToggle />
+          <button onClick={onLogout}>{t("logout")}</button>
+        </div>
       </header>
 
       {stress && (
         <div className={`stress-banner level-${stress.level}`}>
-          學習壓力：{stress.level} — {stress.reason}
+          {t("stressBannerLabel")}
+          {translateLabel(t, stress.level)} — {stress.reason}
         </div>
       )}
 
       <div className="tab-bar">
         <button className={tab === "upload" ? "active" : ""} onClick={() => setTab("upload")}>
-          上傳文件
+          {t("tabUpload")}
         </button>
         <button className={tab === "calendar" ? "active" : ""} onClick={() => setTab("calendar")}>
-          日曆管理
+          {t("tabCalendar")}
         </button>
       </div>
 

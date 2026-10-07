@@ -1,6 +1,7 @@
 import { useRef, useState, type ChangeEvent } from "react";
 import { api, type KnowledgePoint } from "../../api";
 import { subjectColor } from "../../colors";
+import { translateLabel, useLanguage } from "../../i18n";
 
 export function UploadTab({
   knowledgePoints,
@@ -13,6 +14,7 @@ export function UploadTab({
   onUploaded: () => void;
   onOpenQuiz: (kp: KnowledgePoint) => void;
 }) {
+  const { t } = useLanguage();
   const [subject, setSubject] = useState("");
   const [docText, setDocText] = useState("");
   const [file, setFile] = useState<File | null>(null);
@@ -29,17 +31,17 @@ export function UploadTab({
   async function handleUpload() {
     setError("");
     if (!file && docText.trim().length < 10) {
-      setError("請貼上至少 10 個字的文字，或選擇一個檔案");
+      setError(t("uploadMinLengthError"));
       return;
     }
     setUploading(true);
     try {
       if (file) {
-        await api.uploadDocumentFile(file, subject.trim() || "未分類");
+        await api.uploadDocumentFile(file, subject.trim() || t("unclassifiedSubject"));
         setFile(null);
         if (fileInputRef.current) fileInputRef.current.value = "";
       } else {
-        await api.uploadDocument(docText, subject.trim() || "未分類");
+        await api.uploadDocument(docText, subject.trim() || t("unclassifiedSubject"));
         setDocText("");
       }
       onUploaded();
@@ -53,24 +55,24 @@ export function UploadTab({
   return (
     <div>
       <section className="card">
-        <h2>上傳學習文件</h2>
-        <p className="hint">可以直接上傳 PDF 或 PowerPoint（.pptx）檔案，也可以貼上文字，AI 會自動拆解出知識點。</p>
+        <h2>{t("uploadTitle")}</h2>
+        <p className="hint">{t("uploadHint")}</p>
         <div className="row">
           <label>
-            科目
-            <input placeholder="例如：數學" value={subject} onChange={(e) => setSubject(e.target.value)} />
+            {t("subjectLabel")}
+            <input placeholder={t("subjectPlaceholder")} value={subject} onChange={(e) => setSubject(e.target.value)} />
           </label>
         </div>
 
         <div className="upload-methods">
           <div className="upload-method">
-            <p className="method-label">方式一：上傳檔案（PDF / PPTX）</p>
+            <p className="method-label">{t("methodFile")}</p>
             <input ref={fileInputRef} type="file" accept=".pdf,.pptx" onChange={handleFileChange} />
-            {file && <p className="hint">已選擇檔案：{file.name}</p>}
+            {file && <p className="hint">{t("fileSelected", { name: file.name })}</p>}
           </div>
-          <div className="upload-divider">或</div>
+          <div className="upload-divider">{t("or")}</div>
           <div className="upload-method">
-            <p className="method-label">方式二：貼上文字</p>
+            <p className="method-label">{t("methodText")}</p>
             <textarea
               rows={5}
               value={docText}
@@ -81,14 +83,14 @@ export function UploadTab({
                   if (fileInputRef.current) fileInputRef.current.value = "";
                 }
               }}
-              placeholder="例如：第一章 分數的加減法...&#10;第二章 小數的乘除法..."
+              placeholder={t("textPlaceholder")}
             />
           </div>
         </div>
 
         {error && <p className="error">{error}</p>}
         <button className="primary" onClick={handleUpload} disabled={uploading}>
-          {uploading ? "解析中...（可能需要十幾秒，請耐心等候）" : "上傳並解析"}
+          {uploading ? t("uploading") : t("uploadSubmit")}
         </button>
 
         {knowledgePoints.length > 0 && (
@@ -100,11 +102,11 @@ export function UploadTab({
                   <span className="subject-chip" style={{ background: c.bg, color: c.text }}>
                     {kp.subject}
                   </span>
-                  <span className={`level-tag ${kp.level}`}>{kp.level}</span>
+                  <span className={`level-tag ${kp.level}`}>{translateLabel(t, kp.level)}</span>
                   {kp.title}
-                  <span className="minutes">約 {kp.estMinutes} 分鐘</span>
+                  <span className="minutes">{t("aboutMinutes", { n: kp.estMinutes })}</span>
                   <button className="link" onClick={() => onOpenQuiz(kp)}>
-                    出題練習
+                    {t("practiceButton")}
                   </button>
                 </li>
               );
@@ -115,11 +117,11 @@ export function UploadTab({
 
       {weakPoints.length > 0 && (
         <section className="card">
-          <h2>薄弱知識點</h2>
+          <h2>{t("weakPoints")}</h2>
           <ul>
             {weakPoints.map((w, i) => (
               <li key={i}>
-                {w.title} — 錯了 {w.wrongCount} 次
+                {w.title} — {t("wrongCount", { n: w.wrongCount })}
               </li>
             ))}
           </ul>

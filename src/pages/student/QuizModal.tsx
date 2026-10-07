@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { api, type KnowledgePoint, type Question } from "../../api";
+import { useLanguage } from "../../i18n";
 
 export function QuizModal({
   knowledgePoint,
@@ -10,6 +11,7 @@ export function QuizModal({
   onClose: () => void;
   onFinished: () => void;
 }) {
+  const { t } = useLanguage();
   const [questions, setQuestions] = useState<Question[]>([]);
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [results, setResults] = useState<Record<string, { isCorrect: boolean; feedback: string }>>({});
@@ -41,18 +43,14 @@ export function QuizModal({
   return (
     <div className="modal-backdrop" onClick={onClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
-        <h3>出題練習：{knowledgePoint.title}</h3>
-        <p className="hint">會根據您上傳的文件內容，一次出一份完整的練習題（不分難度）。</p>
+        <h3>{t("quizTitle", { title: knowledgePoint.title })}</h3>
+        <p className="hint">{t("quizHint")}</p>
 
         <button className="primary" onClick={generate} disabled={loading}>
-          {loading ? "出題中...（可能需要十幾秒，請耐心等候）" : hasGenerated ? "重新出題" : "產生題目"}
+          {loading ? t("generating") : hasGenerated ? t("regenerate") : t("generateQuestions")}
         </button>
 
-        {aiUnavailable && (
-          <p className="error">
-            目前 AI 暫時無法連線（可能是流量較高），沒有辦法產生題目，請稍後再按一次「重新出題」試試看。
-          </p>
-        )}
+        {aiUnavailable && <p className="error">{t("aiUnavailable")}</p>}
 
         {questions.map((q) => (
           <div key={q.id} className="question">
@@ -76,7 +74,7 @@ export function QuizModal({
               />
             )}
             <button onClick={() => submit(q)} disabled={!answers[q.id]}>
-              提交答案
+              {t("submitAnswer")}
             </button>
             {results[q.id] && (
               <p className={results[q.id].isCorrect ? "feedback ok" : "feedback bad"}>{results[q.id].feedback}</p>
@@ -85,7 +83,7 @@ export function QuizModal({
         ))}
 
         <button className="link" onClick={onClose}>
-          關閉
+          {t("close")}
         </button>
       </div>
     </div>
