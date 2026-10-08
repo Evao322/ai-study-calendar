@@ -5,7 +5,7 @@ import { signToken, verifyToken, newId } from "./auth";
 import { todayLocalStr, addDays } from "./dateUtils";
 import { generateAutoSchedule } from "./scheduler";
 import { computeStressLevel, logStress, hasRecentHighStressStreak } from "./stress";
-import { parseDocumentToKnowledgePoints, reviewManualPlan, generateQuestions, gradeAnswer } from "./gemini";
+import { parseDocumentToKnowledgePoints, reviewManualPlan, generateQuestions, gradeAnswer, type Lang } from "./gemini";
 import { extractTextFromFile, UnsupportedFileError } from "./documentParser";
 
 const app = new Hono<{ Bindings: Env; Variables: AuthVars }>();
@@ -16,6 +16,10 @@ function nowIso() {
 
 function jwtSecret(env: Env) {
   return env.JWT_SECRET || "dev-local-secret-change-later";
+}
+
+function reqLang(c: any): Lang {
+  return c.req.header("x-app-lang") === "en" ? "en" : "zh";
 }
 
 async function requireAuth(c: any, next: () => Promise<void>) {
@@ -145,7 +149,7 @@ app.post("/api/documents/upload", requireAuth, async (c) => {
     .bind(docId, user.id, filename, rawText, nowIso())
     .run();
 
-  const knowledgePoints = await parseDocumentToKnowledgePoints(rawText, c.env.GEMINI_API_KEY);
+  const knowledgePoints = await parseDocumentToKnowledgePoints(rawText, c.env.GEMINI_API_KEY, reqLang(c));
 
   const saved = [];
   let i = 0;
@@ -266,7 +270,7 @@ app.post("/api/calendar/review", requireAuth, async (c) => {
   const user = c.get("user");
   const { deadlineDate } = (await c.req.json().catch(() => ({}))) || {};
   const { results } = await c.env.DB.prepare("SELECT date, type, title, minutes FROM tasks WHERE student_id = ?").bind(user.id).all<any>();
-  const suggestions = await reviewManualPlan(results || [], deadlineDate || "", c.env.GEMINI_API_KEY);
+  const suggestions = await reviewManualPlan(results || [], deadlineDate || "", c.env.GEMINI_API_KEY, reqLang(c));
   return c.json({ suggestions });
 });
 
@@ -328,7 +332,7 @@ app.post("/api/quiz/generate", requireAuth, async (c) => {
   const doc = await c.env.DB.prepare("SELECT raw_text FROM documents WHERE id = ?").bind(kp.document_id).first<any>();
   const sourceExcerpt = doc?.raw_text || kp.title;
 
-  const { questions, aiAvailable } = await generateQuestions(kp.title, sourceExcerpt, c.env.GEMINI_API_KEY);
+  const { questions, aiAvailable } = await generateQuestions(kp.title, sourceExcerpt, c.env.GEMINI_API_KEY, reqLang(c));
   const saved = [];
   for (const q of questions) {
     const id = newId("q");
@@ -350,7 +354,7 @@ app.post("/api/quiz/submit", requireAuth, async (c) => {
   if (!q) return c.json({ error: "找不到這個題目" }, 404);
 
   const question = { type: q.type, content: q.content, answer: q.answer };
-  const { isCorrect, feedback } = await gradeAnswer(question, answer, c.env.GEMINI_API_KEY);
+  const { isCorrect, feedback } = await gradeAnswer(question, answer, c.env.GEMINI_API_KEY, reqLang(c));
 
   const id = newId("qa");
   await c.env.DB.prepare(

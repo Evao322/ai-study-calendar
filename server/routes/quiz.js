@@ -19,7 +19,8 @@ quizRouter.post("/generate", async (req, res) => {
   const doc = db.prepare("SELECT raw_text FROM documents WHERE id = ?").get(kp.document_id);
   const sourceExcerpt = doc?.raw_text || kp.title;
 
-  const { questions, aiAvailable } = await generateQuestions(kp.title, sourceExcerpt);
+  const lang = req.headers["x-app-lang"] === "en" ? "en" : "zh";
+  const { questions, aiAvailable } = await generateQuestions(kp.title, sourceExcerpt, lang);
   const insert = db.prepare(
     "INSERT INTO questions (id, knowledge_point_id, student_id, difficulty, type, content, options, answer, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
   );
@@ -38,7 +39,8 @@ quizRouter.post("/submit", async (req, res) => {
   if (!q) return res.status(404).json({ error: "找不到這個題目" });
 
   const question = { type: q.type, content: q.content, options: JSON.parse(q.options || "null"), answer: q.answer };
-  const { isCorrect, feedback } = await gradeAnswer(question, answer);
+  const lang = req.headers["x-app-lang"] === "en" ? "en" : "zh";
+  const { isCorrect, feedback } = await gradeAnswer(question, answer, lang);
 
   const id = `qa_${nanoid(10)}`;
   db.prepare(

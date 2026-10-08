@@ -29,11 +29,17 @@ export function clearSession() {
   localStorage.removeItem("user");
 }
 
+function getLang(): string {
+  const v = localStorage.getItem("lang");
+  return v === "en" ? "en" : "zh";
+}
+
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const token = getToken();
   const headers: Record<string, string> = {
     ...(options.body instanceof FormData ? {} : { "Content-Type": "application/json" }),
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    "X-App-Lang": getLang(),
   };
   const res = await fetch(`/api${path}`, { ...options, headers });
   const data = await res.json().catch(() => ({}));

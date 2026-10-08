@@ -98,7 +98,8 @@ calendarRouter.delete("/tasks/:id", (req, res) => {
 calendarRouter.post("/review", async (req, res) => {
   const { deadlineDate } = req.body || {};
   const rows = db.prepare("SELECT date, type, title, minutes FROM tasks WHERE student_id = ?").all(req.user.id);
-  const suggestions = await reviewManualPlan(rows, deadlineDate || "");
+  const lang = req.headers["x-app-lang"] === "en" ? "en" : "zh";
+  const suggestions = await reviewManualPlan(rows, deadlineDate || "", lang);
   res.json({ suggestions });
 });
 

@@ -34,7 +34,8 @@ documentsRouter.post("/upload", upload.single("file"), async (req, res) => {
     "INSERT INTO documents (id, student_id, filename, raw_text, created_at) VALUES (?, ?, ?, ?, ?)"
   ).run(docId, studentId, req.file?.originalname || "手動貼上的文字", rawText, new Date().toISOString());
 
-  const knowledgePoints = await parseDocumentToKnowledgePoints(rawText);
+  const lang = req.headers["x-app-lang"] === "en" ? "en" : "zh";
+  const knowledgePoints = await parseDocumentToKnowledgePoints(rawText, lang);
 
   const insertKp = db.prepare(
     "INSERT INTO knowledge_points (id, document_id, student_id, title, level, est_minutes, order_index, subject) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"

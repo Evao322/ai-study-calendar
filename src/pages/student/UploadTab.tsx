@@ -1,6 +1,7 @@
 import { useRef, useState, type ChangeEvent } from "react";
 import { api, type KnowledgePoint } from "../../api";
 import { subjectColor } from "../../colors";
+import { useLang, levelLabel, subjectLabel } from "../../i18n";
 
 export function UploadTab({
   knowledgePoints,
@@ -13,6 +14,7 @@ export function UploadTab({
   onUploaded: () => void;
   onOpenQuiz: (kp: KnowledgePoint) => void;
 }) {
+  const { t, lang } = useLang();
   const [subject, setSubject] = useState("");
   const [docText, setDocText] = useState("");
   const [file, setFile] = useState<File | null>(null);
@@ -29,7 +31,7 @@ export function UploadTab({
   async function handleUpload() {
     setError("");
     if (!file && docText.trim().length < 10) {
-      setError("請貼上至少 10 個字的文字，或選擇一個檔案");
+      setError(t("upload.minLengthError"));
       return;
     }
     setUploading(true);
@@ -53,24 +55,24 @@ export function UploadTab({
   return (
     <div>
       <section className="card">
-        <h2>上傳學習文件</h2>
-        <p className="hint">可以直接上傳 PDF 或 PowerPoint（.pptx）檔案，也可以貼上文字，AI 會自動拆解出知識點。</p>
+        <h2>{t("upload.heading")}</h2>
+        <p className="hint">{t("upload.hint")}</p>
         <div className="row">
           <label>
-            科目
-            <input placeholder="例如：數學" value={subject} onChange={(e) => setSubject(e.target.value)} />
+            {t("upload.subject")}
+            <input placeholder={t("upload.subjectPlaceholder")} value={subject} onChange={(e) => setSubject(e.target.value)} />
           </label>
         </div>
 
         <div className="upload-methods">
           <div className="upload-method">
-            <p className="method-label">方式一：上傳檔案（PDF / PPTX）</p>
+            <p className="method-label">{t("upload.methodFile")}</p>
             <input ref={fileInputRef} type="file" accept=".pdf,.pptx" onChange={handleFileChange} />
-            {file && <p className="hint">已選擇檔案：{file.name}</p>}
+            {file && <p className="hint">{t("upload.fileSelected", { name: file.name })}</p>}
           </div>
-          <div className="upload-divider">或</div>
+          <div className="upload-divider">{t("upload.or")}</div>
           <div className="upload-method">
-            <p className="method-label">方式二：貼上文字</p>
+            <p className="method-label">{t("upload.methodText")}</p>
             <textarea
               rows={5}
               value={docText}
@@ -81,14 +83,14 @@ export function UploadTab({
                   if (fileInputRef.current) fileInputRef.current.value = "";
                 }
               }}
-              placeholder="例如：第一章 分數的加減法...&#10;第二章 小數的乘除法..."
+              placeholder={t("upload.textPlaceholder")}
             />
           </div>
         </div>
 
         {error && <p className="error">{error}</p>}
         <button className="primary" onClick={handleUpload} disabled={uploading}>
-          {uploading ? "解析中...（可能需要十幾秒，請耐心等候）" : "上傳並解析"}
+          {uploading ? t("upload.analyzing") : t("upload.button")}
         </button>
 
         {knowledgePoints.length > 0 && (
@@ -98,13 +100,13 @@ export function UploadTab({
               return (
                 <li key={kp.id}>
                   <span className="subject-chip" style={{ background: c.bg, color: c.text }}>
-                    {kp.subject}
+                    {subjectLabel(kp.subject, lang)}
                   </span>
-                  <span className={`level-tag ${kp.level}`}>{kp.level}</span>
+                  <span className={`level-tag ${kp.level}`}>{levelLabel(kp.level, lang)}</span>
                   {kp.title}
-                  <span className="minutes">約 {kp.estMinutes} 分鐘</span>
+                  <span className="minutes">{t("upload.approxMinutes", { n: kp.estMinutes })}</span>
                   <button className="link" onClick={() => onOpenQuiz(kp)}>
-                    出題練習
+                    {t("upload.practiceQuiz")}
                   </button>
                 </li>
               );
@@ -115,12 +117,10 @@ export function UploadTab({
 
       {weakPoints.length > 0 && (
         <section className="card">
-          <h2>薄弱知識點</h2>
+          <h2>{t("upload.weakPoints")}</h2>
           <ul>
             {weakPoints.map((w, i) => (
-              <li key={i}>
-                {w.title} — 錯了 {w.wrongCount} 次
-              </li>
+              <li key={i}>{t("upload.wrongTimes", { title: w.title, n: w.wrongCount })}</li>
             ))}
           </ul>
         </section>

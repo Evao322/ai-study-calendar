@@ -23,12 +23,34 @@ export function addDaysLocal(d: Date, delta: number): Date {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate() + delta);
 }
 
-export function monthLabel(d: Date): string {
+import type { Lang } from "./i18n";
+
+const MONTH_NAMES_EN = [
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
+];
+
+export function monthLabel(d: Date, lang: Lang = "zh"): string {
+  if (lang === "en") return `${MONTH_NAMES_EN[d.getMonth()]} ${d.getFullYear()}`;
   return `${d.getFullYear()}年${d.getMonth() + 1}月`;
 }
 
-const WEEKDAY_LABELS = ["日", "一", "二", "三", "四", "五", "六"];
-export { WEEKDAY_LABELS };
+const WEEKDAY_LABELS_ZH = ["日", "一", "二", "三", "四", "五", "六"];
+const WEEKDAY_LABELS_EN = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+export function weekdayLabels(lang: Lang = "zh"): string[] {
+  return lang === "en" ? WEEKDAY_LABELS_EN : WEEKDAY_LABELS_ZH;
+}
 
 export function buildMonthGrid(monthDate: Date): Date[] {
   const first = startOfMonth(monthDate);
@@ -36,8 +58,11 @@ export function buildMonthGrid(monthDate: Date): Date[] {
   return Array.from({ length: 42 }, (_, i) => addDaysLocal(gridStart, i));
 }
 
-export function formatSelectedDate(key: string): string {
+export function formatSelectedDate(key: string, lang: Lang = "zh"): string {
   const [y, m, d] = key.split("-").map(Number);
   const date = new Date(y, m - 1, d);
-  return `${m}月${d}日 星期${WEEKDAY_LABELS[date.getDay()]}`;
+  if (lang === "en") {
+    return `${MONTH_NAMES_EN[m - 1]} ${d}, ${y} (${WEEKDAY_LABELS_EN[date.getDay()]})`;
+  }
+  return `${m}月${d}日 星期${WEEKDAY_LABELS_ZH[date.getDay()]}`;
 }

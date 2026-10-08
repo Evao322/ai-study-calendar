@@ -3,8 +3,11 @@ import { api, type AuthUser, type KnowledgePoint, type Task } from "../api";
 import { UploadTab } from "./student/UploadTab";
 import { CalendarView } from "./student/CalendarView";
 import { QuizModal } from "./student/QuizModal";
+import { useLang, stressLevelLabel, stressReasonLabel } from "../i18n";
+import { LanguageToggle } from "../components/LanguageToggle";
 
 export function StudentDashboard({ user, onLogout }: { user: AuthUser; onLogout: () => void }) {
+  const { t, lang } = useLang();
   const [tab, setTab] = useState<"upload" | "calendar">("upload");
   const [knowledgePoints, setKnowledgePoints] = useState<KnowledgePoint[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -13,14 +16,14 @@ export function StudentDashboard({ user, onLogout }: { user: AuthUser; onLogout:
   const [quizForKp, setQuizForKp] = useState<KnowledgePoint | null>(null);
 
   async function refreshAll() {
-    const [kp, t, s, w] = await Promise.all([
+    const [kp, taskList, s, w] = await Promise.all([
       api.getKnowledgePoints(),
       api.getTasks(),
       api.getStress(),
       api.getWeakPoints(),
     ]);
     setKnowledgePoints(kp.knowledgePoints);
-    setTasks(t.tasks);
+    setTasks(taskList.tasks);
     setStress(s);
     setWeakPoints(w.weakPoints);
   }
@@ -33,26 +36,32 @@ export function StudentDashboard({ user, onLogout }: { user: AuthUser; onLogout:
     <div className="dashboard">
       <header className="dashboard-header">
         <div>
-          <h1>AI 智能學習日曆</h1>
+          <h1>{t("app.title")}</h1>
           <p className="subtitle">
-            {user.name}（學生）{user.grade ? ` · ${user.grade}` : ""}
+            {user.name}
+            {t("nav.studentSuffix")}
+            {user.grade ? ` · ${user.grade}` : ""}
           </p>
         </div>
-        <button onClick={onLogout}>登出</button>
+        <div className="header-actions">
+          <LanguageToggle />
+          <button onClick={onLogout}>{t("nav.logout")}</button>
+        </div>
       </header>
 
       {stress && (
         <div className={`stress-banner level-${stress.level}`}>
-          學習壓力：{stress.level} — {stress.reason}
+          {t("student.stressPrefix")}
+          {stressLevelLabel(stress.level, lang)} — {stressReasonLabel(stress.reason, lang)}
         </div>
       )}
 
       <div className="tab-bar">
         <button className={tab === "upload" ? "active" : ""} onClick={() => setTab("upload")}>
-          上傳文件
+          {t("student.tabUpload")}
         </button>
         <button className={tab === "calendar" ? "active" : ""} onClick={() => setTab("calendar")}>
-          日曆管理
+          {t("student.tabCalendar")}
         </button>
       </div>
 
