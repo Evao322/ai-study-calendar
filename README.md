@@ -66,6 +66,24 @@
 * 多學科獨立管理
 * 商用收費機制
 
+#### 學習壓力等級判定條件
+
+系統看學生「最近 3 天」（含今天）的任務資料，依兩個指標判斷：
+
+| 指標 | 定義 |
+|---|---|
+| 過載天數 | 這 3 天中，有幾天「當天安排的總分鐘數 > 240 分鐘」 |
+| 完成率 | 只算**已經過去的日子**（不含今天）已完成任務 ÷ 總任務數 |
+
+判定順序（由高到低）：
+
+| 等級 | 條件 |
+|---|---|
+| 🔴 過載 | 過載天數 ≥ 2 天，**或** 完成率 < 40% |
+| 🟠 偏高 | 過載天數 ≥ 1 天，**或** 完成率 < 60% |
+| 🟢 輕鬆 | 沒有過載、完成率正常，且**今天**安排的時間 > 0 且 < 60 分鐘 |
+| 🔵 正常 | 以上皆不符合（含完全沒有任務時的預設值） |
+
 #### 資料儲存
 
 目前使用本機檔案 `server/data.db` 儲存所有資料（學生、老師、班級、任務、題目等），刪除這個檔案會清空所有測試資料。
@@ -131,6 +149,24 @@ This prototype consists of two parts that must be started simultaneously:
 * Automated teacher alerts for consecutive days of extreme student stress (currently recorded in the database, but lacking a real-time notification interface).
 * Multi-subject independent management.
 * Commercial monetization mechanisms.
+
+#### Stress Level Criteria
+
+The system looks at a student's task data over the **last 3 days** (including today), using two metrics:
+
+| Metric | Definition |
+|---|---|
+| Overload days | Out of those 3 days, how many had more than 240 total minutes scheduled |
+| Completion rate | Completed tasks ÷ total tasks, counted only over **past** days (today is excluded, since it isn't over yet) |
+
+Evaluated in this order (highest severity first):
+
+| Level | Condition |
+|---|---|
+| 🔴 Overloaded | Overload days ≥ 2, **or** completion rate < 40% |
+| 🟠 Elevated | Overload days ≥ 1, **or** completion rate < 60% |
+| 🟢 Light | No overload, normal completion rate, **and** today's scheduled time is > 0 and < 60 minutes |
+| 🔵 Normal | None of the above apply (also the default when there are no tasks at all) |
 
 #### Data Storage
 
